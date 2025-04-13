@@ -1,110 +1,127 @@
-import numpy as np 
-import pandas as pd 
-import matplotlib.pyplot as plt
-import cv2
-import tensorflow as tf
-from PIL import Image
-import os
-from sklearn.model_selection import train_test_split
-from keras.utils import to_categorical
-from keras.models import Sequential, load_model
-from keras.layers import Conv2D, MaxPool2D, Dense, Flatten, Dropout
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk, ImageOps
+import numpy as np
+from keras.models import load_model
 
-data = []
-labels = []
-classes = 43
-cur_path = os.getcwd()
+# Load model
+model = load_model('traffic_classifier.h5')
 
-#Retrieving the images and their labels 
-for i in range(classes):
-    path = os.path.join(cur_path,'train',str(i))
-    images = os.listdir(path)
+# Class labels
+classes = { 
+    1:'Speed limit (20km/h)', 2:'Speed limit (30km/h)', 3:'Speed limit (50km/h)',
+    4:'Speed limit (60km/h)', 5:'Speed limit (70km/h)', 6:'Speed limit (80km/h)',
+    7:'End of speed limit (80km/h)', 8:'Speed limit (100km/h)', 9:'Speed limit (120km/h)',
+    10:'No passing', 11:'No passing veh over 3.5 tons', 12:'Right-of-way at intersection',
+    13:'Priority road', 14:'Yield', 15:'Stop', 16:'No vehicles',
+    17:'Veh > 3.5 tons prohibited', 18:'No entry', 19:'General caution',
+    20:'Dangerous curve left', 21:'Dangerous curve right', 22:'Double curve',
+    23:'Bumpy road', 24:'Slippery road', 25:'Road narrows on the right',
+    26:'Road work', 27:'Traffic signals', 28:'Pedestrians',
+    29:'Children crossing', 30:'Bicycles crossing', 31:'Beware of ice/snow',
+    32:'Wild animals crossing', 33:'End speed + passing limits', 34:'Turn right ahead',
+    35:'Turn left ahead', 36:'Ahead only', 37:'Go straight or right',
+    38:'Go straight or left', 39:'Keep right', 40:'Keep left',
+    41:'Roundabout mandatory', 42:'End of no passing', 43:'End no passing veh > 3.5 tons'
+}
 
-    for a in images:
+# Initialize GUI
+top = tk.Tk()
+top.geometry('900x700')
+top.title('Traffic Sign Classification')
+top.configure(background='#F0F4F8')
+top.minsize(900, 700)
+
+# Style configuration
+BUTTON_BG = '#2D4263'
+BUTTON_ACTIVE = '#1A2A4A'
+TEXT_COLOR = '#FFFFFF'
+RESULT_BG = '#FFFFFF'
+
+# Create main container
+main_frame = tk.Frame(top, bg='#F0F4F8')
+main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+# Heading
+heading = tk.Label(main_frame, text="Traffic Sign Recognition", 
+                  font=('Arial', 24, 'bold'), bg='#F0F4F8', fg='#2D4263')
+heading.pack(pady=20)
+
+# Image display frame
+img_frame = tk.Frame(main_frame, bg=RESULT_BG, bd=2, relief=tk.SUNKEN)
+img_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+# Placeholder text
+placeholder = tk.Label(img_frame, text="Upload Traffic Sign Image", 
+                      font=('Arial', 14), fg='#7D8BA5', bg=RESULT_BG)
+placeholder.pack(expand=True, fill=tk.BOTH)
+
+sign_image = tk.Label(img_frame, bg=RESULT_BG)
+sign_image.pack_forget()
+
+# Result label
+result_frame = tk.Frame(main_frame, bg=RESULT_BG, bd=2, relief=tk.SUNKEN)
+result_frame.pack(fill=tk.X, pady=10)
+label = tk.Label(result_frame, text='', font=('Arial', 16, 'bold'), 
+                bg=RESULT_BG, fg=BUTTON_BG, pady=10)
+label.pack()
+
+def classify(file_path):
+    try:
+        with Image.open(file_path) as img:
+            # Preprocess image
+            img = img.resize((30, 30), Image.Resampling.LANCZOS)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img_array = np.array(img) / 255.0
+            img_array = np.expand_dims(img_array, axis=0)
+            
+            # Make prediction
+            pred = np.argmax(model.predict(img_array), axis=1)[0]
+            sign = classes.get(pred + 1, "Unknown sign")
+            label.config(text=sign)
+    except Exception as e:
+        messagebox.showerror("Error", f"Classification failed: {str(e)}")
+
+def show_classify_button(file_path):
+    classify_btn = tk.Button(main_frame, text="Analyze Image", 
+                            command=lambda: classify(file_path),
+                            bg=BUTTON_BG, fg=TEXT_COLOR, activebackground=BUTTON_ACTIVE,
+                            font=('Arial', 12, 'bold'), padx=20, pady=8, cursor="hand2")
+    classify_btn.pack(pady=15)
+    
+    # Hover effects
+    classify_btn.bind("<Enter>", lambda e: classify_btn.config(bg=BUTTON_ACTIVE))
+    classify_btn.bind("<Leave>", lambda e: classify_btn.config(bg=BUTTON_BG))
+
+def upload_image():
+    file_path = filedialog.askopenfilename()
+    if file_path:
         try:
-            image = Image.open(path + '\\'+ a)
-            image = image.resize((30,30))
-            image = np.array(image)
-            #sim = Image.fromarray(image)
-            data.append(image)
-            labels.append(i)
-        except:
-            print("Error loading image")
+            with Image.open(file_path) as img:
+                # Fix image orientation
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail((400, 400))
+                
+                # Update display
+                imgtk = ImageTk.PhotoImage(img)
+                placeholder.pack_forget()
+                sign_image.config(image=imgtk)
+                sign_image.image = imgtk
+                sign_image.pack(expand=True)
+                label.config(text='')
+                show_classify_button(file_path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load image: {str(e)}")
 
-#Converting lists into numpy arrays
-data = np.array(data)
-labels = np.array(labels)
+# Upload button
+upload_btn = tk.Button(main_frame, text="Upload Image", command=upload_image,
+                      bg=BUTTON_BG, fg=TEXT_COLOR, activebackground=BUTTON_ACTIVE,
+                      font=('Arial', 12, 'bold'), padx=20, pady=8, cursor="hand2")
+upload_btn.pack(pady=15)
 
-print(data.shape, labels.shape)
-#Splitting training and testing dataset
-X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
+# Hover effects
+upload_btn.bind("<Enter>", lambda e: upload_btn.config(bg=BUTTON_ACTIVE))
+upload_btn.bind("<Leave>", lambda e: upload_btn.config(bg=BUTTON_BG))
 
-print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-
-#Converting the labels into one hot encoding
-y_train = to_categorical(y_train, 43)
-y_test = to_categorical(y_test, 43)
-
-#Building the model
-model = Sequential()
-model.add(Conv2D(filters=32, kernel_size=(5,5), activation='relu', input_shape=X_train.shape[1:]))
-model.add(Conv2D(filters=32, kernel_size=(5,5), activation='relu'))
-model.add(MaxPool2D(pool_size=(2, 2)))
-model.add(Dropout(rate=0.25))
-model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
-model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPool2D(pool_size=(2, 2)))
-model.add(Dropout(rate=0.25))
-model.add(Flatten())
-model.add(Dense(256, activation='relu'))
-model.add(Dropout(rate=0.5))
-model.add(Dense(43, activation='softmax'))
-
-#Compilation of the model
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-epochs = 15
-history = model.fit(X_train, y_train, batch_size=32, epochs=epochs, validation_data=(X_test, y_test))
-model.save("my_model.h5")
-
-#plotting graphs for accuracy 
-plt.figure(0)
-plt.plot(history.history['accuracy'], label='training accuracy')
-plt.plot(history.history['val_accuracy'], label='val accuracy')
-plt.title('Accuracy')
-plt.xlabel('epochs')
-plt.ylabel('accuracy')
-plt.legend()
-plt.show()
-
-plt.figure(1)
-plt.plot(history.history['loss'], label='training loss')
-plt.plot(history.history['val_loss'], label='val loss')
-plt.title('Loss')
-plt.xlabel('epochs')
-plt.ylabel('loss')
-plt.legend()
-plt.show()
-
-#testing accuracy on test dataset
-from sklearn.metrics import accuracy_score
-
-y_test = pd.read_csv('Test.csv')
-
-labels = y_test["ClassId"].values
-imgs = y_test["Path"].values
-
-data=[]
-
-for img in imgs:
-    image = Image.open(img)
-    image = image.resize((30,30))
-    data.append(np.array(image))
-
-X_test=np.array(data)
-
-pred = model.predict_classes(X_test)
-
-#Accuracy with the test data
-from sklearn.metrics import accuracy_score
-print(accuracy_score(labels, pred))
+top.mainloop()
